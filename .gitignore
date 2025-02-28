@@ -1,3 +1,6 @@
+# Ignore .history directory
+.history/
+
 # Project specific
 src/fuzzer
 fuzzer
