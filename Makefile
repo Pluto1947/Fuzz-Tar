@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -o3
+CFLAGS = -std=c99 -Wall -Wextra -O3 
 
 TARGET = fuzzer
 SRC = src/main.c src/utils.c
@@ -9,8 +9,8 @@ HEADER = src/constants.h src/utils.h
 
 all: $(TARGET)
 
-$(TARGET): $(SRC)
+$(TARGET): $(SRC) $(HEADER)
 	$(CC) $(CFLAGS) $(SRC) -o $(TARGET)
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) *.tar success_*.tar  

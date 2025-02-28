@@ -1,6 +1,9 @@
 # Ignore .history directory
 .history/
 
+# Ignore extractor_apple
+extractor_apple/
+
 # Project specific
 src/fuzzer
 fuzzer

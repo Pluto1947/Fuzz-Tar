@@ -99,7 +99,7 @@ void tar_init_header(tar_header *header)
     snprintf(header->uid, sizeof(header->uid), "01000");
     snprintf(header->gid, sizeof(header->gid), "01000");
     snprintf(header->size, sizeof(header->size), "%011o", 0);
-    snprintf(header->mtime, sizeof(header->mtime), "%011o", (long)time(NULL));
+    snprintf(header->mtime, sizeof(header->mtime), "%011lo", (long)time(NULL)); // Changed %o to %lo
     header->typeflag = REGTYPE;
     snprintf(header->magic, sizeof(header->magic), TMAGIC);
     snprintf(header->version, sizeof(header->version), TVERSION);

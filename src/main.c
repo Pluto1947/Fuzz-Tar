@@ -1,10 +1,9 @@
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <limits.h>
 #include "utils.h"
-#include "constants.h"
 
 static char *extractor_path;
 
@@ -13,7 +12,6 @@ static char *extractor_path;
  * @param field_name Pointer to the field to fuzz.
  * @param field_size Size of the field.
  */
-
 void fuzz_field(char *field_name, size_t field_size)
 {
     tar_header header;
@@ -26,7 +24,7 @@ void fuzz_field(char *field_name, size_t field_size)
         test_status.successful_with_empty_field++;
 
     // Test 2: Non-ASCII field
-    char non_ascii = 'Ω'; // Unicode U+03A9, may overflow (intended)
+    char non_ascii = '\xA9'; // Copyright symbol (single byte, 0xA9)
     strncpy(field_name, &non_ascii, field_size);
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
@@ -41,8 +39,8 @@ void fuzz_field(char *field_name, size_t field_size)
 
     // Test 4: Too short field (random letters, one less than size)
     srand(time(NULL));
-    for (int i = 0; i < (int)field_size - 2; i++)
-    {
+    for (size_t i = 0; i < field_size - 2; i++)
+    { // Changed to size_t
         field_name[i] = 'a' + rand() % 26;
     }
     field_name[field_size - 1] = '\0';
@@ -57,7 +55,7 @@ void fuzz_field(char *field_name, size_t field_size)
     if (run_extractor(extractor_path))
         test_status.successful_with_non_octal_field++;
 
-    // Test 6: Field cut in the middle (hald-filled with 1s)
+    // Test 6: Field cut in middle (half-filled with 1s)
     memset(field_name, 0, field_size);
     memset(field_name, '1', field_size / 2);
     tar_generate_empty(&header);
@@ -81,7 +79,7 @@ void fuzz_field(char *field_name, size_t field_size)
     memset(field_name, '0', field_size / 2);
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
-        test_status.successful_with_no_null_bytes++;
+        test_status.successful_with_null_byte_in_middle++;
 
     // Test 10: Null byte in middle (all 0s, last byte null)
     memset(field_name, '0', field_size - 1);
@@ -109,7 +107,7 @@ void fuzz_field(char *field_name, size_t field_size)
 
     // Test 13: Special characters
     char special_chars[] = {'\"', '\'', ' ', '\t', '\r', '\n', '\v', '\f', '\b'};
-    for (int i = 0; i < sizeof(special_chars); i++)
+    for (size_t i = 0; i < sizeof(special_chars); i++)
     {
         memset(field_name, special_chars[i], field_size - 1);
         field_name[field_size - 1] = '\0';
@@ -151,7 +149,7 @@ void fuzz_mode()
     fuzz_field(header.mode, sizeof(header.mode));
 
     int modes[] = {TSUID, TSGID, TSVTX, TUREAD, TUWRITE, TUEXEC, TGREAD, TGWRITE, TGEXEC, TOREAD, TOWRITE, TOEXEC};
-    for (int i = 0; i < sizeof(modes) / sizeof(modes[0]); i++)
+    for (size_t i = 0; i < sizeof(modes) / sizeof(modes[0]); i++)
     {
         tar_init_header(&header);
         snprintf(header.mode, sizeof(header.mode), "%o", modes[i]);
@@ -202,7 +200,7 @@ void fuzz_size()
     fuzz_field(header.size, sizeof(header.size));
 
     char content[] = "This is a test file content.";
-    size_t content_size = sizeof(content); // Includes null terminator
+    size_t content_size = sizeof(content);
     int num_tries = 10;
     int possible_sizes[num_tries];
     srand(time(NULL));
@@ -242,7 +240,7 @@ void fuzz_mtime()
 
     time_t now = time(NULL);
     time_t times[] = {INT_MIN, -300, 300, now - (365 * 24 * 60 * 60), now, now + (30 * 24 * 60 * 60), now + INT_MAX, LLONG_MAX};
-    for (int i = 0; i < sizeof(times) / sizeof(times[0]); i++)
+    for (size_t i = 0; i < sizeof(times) / sizeof(times[0]); i++)
     {
         tar_init_header(&header);
         snprintf(header.mtime, sizeof(header.mtime), "%lo", (unsigned long)times[i]);
@@ -256,7 +254,7 @@ void fuzz_mtime()
 /**
  * @brief Fuzz the 'chksum' field of the tar header.
  */
-void fuzz_checksum()
+void fuzz_chksum()
 {
     tar_header header;
     tar_init_header(&header);
@@ -265,11 +263,11 @@ void fuzz_checksum()
     update_checksum = 0; // Disable checksum updates
     fuzz_field(header.chksum, sizeof(header.chksum));
 
-    char content[] = "Checksum fuzzinf data.";
-    size_t content_size = sizeof(content); // Includes null terminator
+    char content[] = "Checksum fuzzing data.";
+    size_t content_size = sizeof(content);
     char end_data[BLOCK_SIZE] = {0};
     tar_init_header(&header);
-    memset(header.chksum, 0, sizeof(header.chksum));
+    memset(&header.chksum, 0, sizeof(header.chksum));
     tar_generate(&header, content, content_size, end_data, BLOCK_SIZE);
     run_extractor(extractor_path);
 
@@ -291,7 +289,7 @@ void fuzz_typeflag()
     for (int i = 0; i < 256; i++)
     {
         tar_init_header(&header);
-        header.typeflag = i;
+        header.typeflag = (char)i;
         tar_generate_empty(&header);
         run_extractor(extractor_path);
     }
@@ -301,7 +299,7 @@ void fuzz_typeflag()
     run_extractor(extractor_path);
 
     tar_init_header(&header);
-    header.typeflag = '日'; // Non-ASCII, may overflow (intended)
+    header.typeflag = '\xFF'; // Max single-byte value (intended overflow test)
     tar_generate_empty(&header);
     run_extractor(extractor_path);
 
@@ -356,7 +354,7 @@ void fuzz_version()
         {
             octal[1] = j + '0';
             tar_init_header(&header);
-            snprintf(header.version, sizeof(header.version), "%s", octal);
+            strncpy(header.version, octal, sizeof(header.version));
             tar_generate_empty(&header);
             run_extractor(extractor_path);
         }
@@ -394,7 +392,7 @@ void fuzz_gname()
 }
 
 /**
- * @brief Fuzz the 'end of file' field of the tar header.
+ * @brief Fuzz the end-of-file marker of the tar archive.
  */
 void fuzz_end_of_file()
 {
@@ -405,11 +403,11 @@ void fuzz_end_of_file()
 
     int end_sizes[] = {0, 1, END_BYTES / 4, END_BYTES / 2, END_BYTES - 1, END_BYTES, END_BYTES + 1, END_BYTES * 2, END_BYTES * 4};
     char content[] = "End of file test data.";
-    size_t content_size = sizeof(content); // Includes null terminator
+    size_t content_size = sizeof(content);
     char end_data[END_BYTES * 4] = {0};
 
-    for (int i = 0; i < sizeof(end_sizes) / sizeof(end_sizes[0]); i++)
-    {
+    for (size_t i = 0; i < sizeof(end_sizes) / sizeof(end_sizes[0]); i++)
+    { // Changed to size_t
         tar_init_header(&header);
         tar_generate(&header, NULL, 0, end_data, end_sizes[i]);
         run_extractor(extractor_path);
@@ -436,14 +434,14 @@ int main(int argc, char *argv[])
     extractor_path = argv[1];
     init_test_status(&test_status);
 
-    printf("~~~ Starting Fuzzing ~~~\n");
+    printf("\n~~~ Starting Fuzzing ~~~\n");
     fuzz_name();
     fuzz_mode();
     fuzz_uid();
     fuzz_gid();
     fuzz_size();
     fuzz_mtime();
-    fuzz_checksum();
+    fuzz_chksum();
     fuzz_typeflag();
     fuzz_linkname();
     fuzz_magic();
