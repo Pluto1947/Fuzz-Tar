@@ -8,16 +8,6 @@ struct test_status_t
     int number_of_success;
     int number_of_tar_created;
 
-    int successful_with_empty_field;
-    int successful_with_non_ascii_field;
-    int successful_with_non_numeric_field;
-    int successful_with_too_short_field;
-    int successful_with_non_octal_field;
-    int successful_with_field_cut_in_middle;
-    int successful_with_field_not_terminated_null_byte;
-    int successful_with_null_byte_in_middle;
-    int successful_with_no_null_bytes;
-    int successful_with_special_character;
     int successful_with_negative_value;
 
     int name_fuzzing_success;
@@ -38,7 +28,8 @@ struct test_status_t
     int multi_file_fuzzing_success;
     int huge_content_fuzzing_success;
     int prefix_fuzzing_success;
-    int padding_fuzzing_success;
+    int padding_footer_fuzzing_success;
+    int overflow_all_fuzzing_success;
 };
 
 void init_test_status(struct test_status_t *ts);

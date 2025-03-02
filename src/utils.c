@@ -18,18 +18,7 @@ void print_test_status(struct test_status_t *ts)
     printf("Total tries: %d\n", ts->number_of_tries);
     printf("Total successes: %d\n", ts->number_of_success);
     printf("Tars created: %d\n\n", ts->number_of_tar_created);
-    printf("Success with:\n");
-    printf("\t     Empty field                        : %d\n", ts->successful_with_empty_field);
-    printf("\t     Non-ASCII field                    : %d\n", ts->successful_with_non_ascii_field);
-    printf("\t     non numeric field                  : %d\n", ts->successful_with_non_numeric_field);
-    printf("\t     too short field                    : %d\n", ts->successful_with_too_short_field);
-    printf("\t     non octal field                    : %d\n", ts->successful_with_non_octal_field);
-    printf("\t     field cut in middle                : %d\n", ts->successful_with_field_cut_in_middle);
-    printf("\t     field null terminated              : %d\n", ts->successful_with_field_not_terminated_null_byte);
-    printf("\t     field with null byte in the middle : %d\n", ts->successful_with_null_byte_in_middle);
-    printf("\t     field with no null bytes           : %d\n", ts->successful_with_no_null_bytes);
-    printf("\t     field with special character       : %d\n", ts->successful_with_special_character);
-    printf("\t     field with negative value          : %d\n\n", ts->successful_with_negative_value);
+
     printf("Success on \n");
     printf("\t   name field       : %d\n", ts->name_fuzzing_success);
     printf("\t   mode field       : %d\n", ts->mode_fuzzing_success);
@@ -48,8 +37,9 @@ void print_test_status(struct test_status_t *ts)
     printf("\t   multi file field : %d\n", ts->multi_file_fuzzing_success);
     printf("\t   huge content field: %d\n", ts->huge_content_fuzzing_success);
     printf("\t   prefix field     : %d\n", ts->prefix_fuzzing_success);
-    printf("\t   padding field    : %d\n", ts->padding_fuzzing_success);
+    printf("\t   padding field    : %d\n", ts->padding_footer_fuzzing_success);
     printf("\t   end of file field: %d\n\n", ts->end_of_file_fuzzing_success);
+    printf("\t   overflow all field:%d\n\n", ts->overflow_all_fuzzing_success);
 }
 
 unsigned int tar_compute_checksum(tar_header *entry)
@@ -95,7 +85,7 @@ int run_extractor(char *path)
     }
     else
     {
-        printf("Extractor output: '%s'\n", buf); // Keep for non-crash cases
+        printf("Extractor output: '%s'\n", buf);
     }
     pclose(fp);
     return rv;
@@ -137,7 +127,7 @@ void tar_generate(tar_header *header, char *content, size_t content_size, char *
     if (end_size > 0)
         fwrite(end_data, end_size, 1, fp);
     fclose(fp);
-    test_status.number_of_tar_created++; // Ensure this runs
+    test_status.number_of_tar_created++;
 }
 
 void tar_generate_empty(tar_header *header)

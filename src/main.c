@@ -8,125 +8,6 @@
 static char *extractor_path;
 
 /**
- * @brief Fuzz a specific field in the tar header with various test cases.
- * @param field_name Pointer to the field to fuzz.
- * @param field_size Size of the field.
- */
-void fuzz_field(char *field_name, size_t field_size)
-{
-    tar_header header;
-    tar_init_header(&header);
-
-    // Test 1: Empty field
-    strncpy(field_name, "", field_size);
-    tar_generate_empty(&header);
-    if (run_extractor(extractor_path))
-        test_status.successful_with_empty_field++;
-
-    // Test 2: Non-ASCII field
-    char non_ascii = '\xA9'; // Copyright symbol (single byte, 0xA9)
-    strncpy(field_name, &non_ascii, field_size);
-    tar_generate_empty(&header);
-    if (run_extractor(extractor_path))
-        test_status.successful_with_non_ascii_field++;
-
-    // Test 3: Non-numeric field
-    char non_numeric[] = "This is not a number!";
-    strncpy(field_name, non_numeric, field_size);
-    tar_generate_empty(&header);
-    if (run_extractor(extractor_path))
-        test_status.successful_with_non_numeric_field++;
-
-    // Test 4: Too short field (random letters, one less than size)
-    srand(time(NULL));
-    for (size_t i = 0; i < field_size - 2; i++)
-    { // Changed to size_t
-        field_name[i] = 'a' + rand() % 26;
-    }
-    field_name[field_size - 1] = '\0';
-    tar_generate_empty(&header);
-    if (run_extractor(extractor_path))
-        test_status.successful_with_too_short_field++;
-
-    // Test 5: Non-octal field (all 9s)
-    memset(field_name, '9', field_size - 1);
-    field_name[field_size - 1] = '\0';
-    tar_generate_empty(&header);
-    if (run_extractor(extractor_path))
-        test_status.successful_with_non_octal_field++;
-
-    // Test 6: Field cut in middle (half-filled with 1s)
-    memset(field_name, 0, field_size);
-    memset(field_name, '1', field_size / 2);
-    tar_generate_empty(&header);
-    if (run_extractor(extractor_path))
-        test_status.successful_with_field_cut_in_middle++;
-
-    // Test 7: Field not terminated by null byte (all 5s)
-    memset(field_name, '5', field_size);
-    tar_generate_empty(&header);
-    if (run_extractor(extractor_path))
-        test_status.successful_with_field_not_terminated_null_byte++;
-
-    // Test 8: Null byte in middle (full nulls)
-    memset(field_name, 0, field_size);
-    tar_generate_empty(&header);
-    if (run_extractor(extractor_path))
-        test_status.successful_with_null_byte_in_middle++;
-
-    // Test 9: Null byte in middle (half nulls, half 0s)
-    memset(field_name, 0, field_size);
-    memset(field_name, '0', field_size / 2);
-    tar_generate_empty(&header);
-    if (run_extractor(extractor_path))
-        test_status.successful_with_null_byte_in_middle++;
-
-    // Test 10: Null byte in middle (all 0s, last byte null)
-    memset(field_name, '0', field_size - 1);
-    field_name[field_size - 1] = '\0';
-    tar_generate_empty(&header);
-    if (run_extractor(extractor_path))
-        test_status.successful_with_null_byte_in_middle++;
-
-    // Test 11: Null byte in middle (all nulls, last byte 0)
-    memset(field_name, 0, field_size - 1);
-    field_name[field_size - 1] = '0';
-    tar_generate_empty(&header);
-    if (run_extractor(extractor_path))
-        test_status.successful_with_null_byte_in_middle++;
-
-    // Test 12: No null bytes (replace nulls with spaces)
-    size_t first_term = strnlen(field_name, field_size);
-    if (first_term < field_size)
-    {
-        memset(field_name + first_term, ' ', field_size - first_term);
-    }
-    tar_generate_empty(&header);
-    if (run_extractor(extractor_path))
-        test_status.successful_with_no_null_bytes++;
-
-    // Test 13: Special characters
-    char special_chars[] = {'\"', '\'', ' ', '\t', '\r', '\n', '\v', '\f', '\b'};
-    for (size_t i = 0; i < sizeof(special_chars); i++)
-    {
-        memset(field_name, special_chars[i], field_size - 1);
-        field_name[field_size - 1] = '\0';
-        tar_generate_empty(&header);
-        if (run_extractor(extractor_path))
-            test_status.successful_with_special_character++;
-    }
-
-    // Test 14: Negative value
-    snprintf(field_name, field_size, "%d", INT_MIN);
-    tar_generate_empty(&header);
-    if (run_extractor(extractor_path))
-        test_status.successful_with_negative_value++;
-}
-
-/**
- * @brief Fuzz the 'name' field with aggressive edge cases.
- */
-/**
  * @brief Fuzz the 'name' field with aggressive edge cases.
  */
 void fuzz_name()
@@ -135,29 +16,34 @@ void fuzz_name()
     tar_init_header(&header);
     printf("\n+++ Fuzzing Name +++\n");
 
-    // Test 1: Non-ASCII overflow with prefix
+    // Test 1: Overflow with prefix and invalid typeflag
     memset(header.name, '\xFF', sizeof(header.name));
     memset(header.prefix, '\xFF', sizeof(header.prefix));
+    header.typeflag = '\x92'; // Non-standard type
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.name_fuzzing_success++;
 
-    // Test 2: No null terminator
+    // Test 2: Junk with no null and content
     memset(header.name, 'A', sizeof(header.name));
-    tar_generate_empty(&header);
+    header.name[0] = '\x01';
+    header.name[sizeof(header.name) - 1] = '\xFF';
+    snprintf(header.size, sizeof(header.size), "00000000001");
+    char content[] = "X";
+    tar_generate(&header, content, sizeof(content), NULL, 0);
     if (run_extractor(extractor_path))
         test_status.name_fuzzing_success++;
 
-    // Test 3: Mixed junk with embedded null
+    // Test 3: Embedded nulls with huge size
     const char junk[] = "\x01\xFFinvalid\x00path";
     memcpy(header.name, junk, sizeof(junk) < sizeof(header.name) ? sizeof(junk) : sizeof(header.name));
-    tar_generate_empty(&header);
+    snprintf(header.size, sizeof(header.size), "77777777777");
+    tar_generate(&header, content, sizeof(content), NULL, 0);
     if (run_extractor(extractor_path))
         test_status.name_fuzzing_success++;
 
     printf("+++ Name Fuzzing Done +++\n");
 }
-
 /**
  * @brief Fuzz the 'mode' field of the tar header.
  */
@@ -256,8 +142,6 @@ void fuzz_size()
     tar_header header;
     tar_init_header(&header);
     printf("\n+++ Fuzzing Size +++\n");
-    int prev_success = test_status.number_of_success;
-    fuzz_field(header.size, sizeof(header.size));
 
     char content[] = "This is a test file content.";
     size_t content_size = sizeof(content);
@@ -275,21 +159,15 @@ void fuzz_size()
         snprintf(header.size, sizeof(header.size), "%o", possible_sizes[i]);
         tar_generate(&header, content, content_size, end_data, BLOCK_SIZE);
         if (run_extractor(extractor_path))
-        {
-            test_status.size_fuzzing_success++; // Direct increment
-        }
+            test_status.size_fuzzing_success++;
     }
     tar_init_header(&header);
     snprintf(header.size, sizeof(header.size), "%d", INT_MIN);
     char end_data[BLOCK_SIZE] = {0};
     tar_generate(&header, content, content_size, end_data, BLOCK_SIZE);
     if (run_extractor(extractor_path))
-    {
         test_status.size_fuzzing_success++;
-        test_status.successful_with_negative_value++;
-    }
 
-    test_status.size_fuzzing_success = test_status.number_of_success - prev_success; // Keep for consistency
     printf("+++ Size Fuzzing Done +++\n");
 }
 
@@ -302,21 +180,31 @@ void fuzz_mtime()
     tar_init_header(&header);
     printf("\n+++ Fuzzing Mtime +++\n");
 
-    // Test 1: Beyond max octal
+    // Test 1: Extreme overflow with valid checksum
     snprintf(header.mtime, sizeof(header.mtime), "99999999999");
+    tar_compute_checksum(&header);
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.mtime_fuzzing_success++;
 
-    // Test 2: Non-octal with overflow
+    // Test 2: Non-octal with multi-file
     snprintf(header.mtime, sizeof(header.mtime), "FFFFFFF");
-    tar_generate_empty(&header);
+    FILE *fp = fopen("archive.tar", "wb");
+    fwrite(&header, sizeof(tar_header), 1, fp);
+    tar_init_header(&header);
+    fwrite(&header, sizeof(tar_header), 1, fp);
+    char end[END_BYTES] = {0};
+    fwrite(end, END_BYTES, 1, fp);
+    fclose(fp);
+    test_status.number_of_tar_created++;
     if (run_extractor(extractor_path))
         test_status.mtime_fuzzing_success++;
 
-    // Test 3: Negative junk
+    // Test 3: Negative with content
     snprintf(header.mtime, sizeof(header.mtime), "-ABCDEF");
-    tar_generate_empty(&header);
+    snprintf(header.size, sizeof(header.size), "00000000001");
+    char content[] = "Y";
+    tar_generate(&header, content, sizeof(content), NULL, 0);
     if (run_extractor(extractor_path))
         test_status.mtime_fuzzing_success++;
 
@@ -333,21 +221,31 @@ void fuzz_chksum()
     printf("\n+++ Fuzzing Checksum +++\n");
     update_checksum = 0;
 
-    // Test 1: Plausible but wrong checksum
-    snprintf(header.chksum, sizeof(header.chksum), "0000001");
+    // Test 1: Slightly off checksum
+    tar_compute_checksum(&header);
+    header.chksum[0] = '1';
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.checksum_fuzzing_success++;
 
-    // Test 2: Overflow checksum
+    // Test 2: Overflow with content
     snprintf(header.chksum, sizeof(header.chksum), "77777777");
-    tar_generate_empty(&header);
+    snprintf(header.size, sizeof(header.size), "00000000001");
+    char content[] = "Z";
+    tar_generate(&header, content, sizeof(content), NULL, 0);
     if (run_extractor(extractor_path))
         test_status.checksum_fuzzing_success++;
 
-    // Test 3: Junk checksum
+    // Test 3: Junk with multi-file
     snprintf(header.chksum, sizeof(header.chksum), "XYZ123");
-    tar_generate_empty(&header);
+    FILE *fp = fopen("archive.tar", "wb");
+    fwrite(&header, sizeof(tar_header), 1, fp);
+    tar_init_header(&header);
+    fwrite(&header, sizeof(tar_header), 1, fp);
+    char end[END_BYTES] = {0};
+    fwrite(end, END_BYTES, 1, fp);
+    fclose(fp);
+    test_status.number_of_tar_created++;
     if (run_extractor(extractor_path))
         test_status.checksum_fuzzing_success++;
 
@@ -421,16 +319,32 @@ void fuzz_linkname()
 }
 
 /**
- * @brief Fuzz the 'magic' field of the tar header.
+ * @brief Fuzz the 'magic' field with invalid values.
  */
 void fuzz_magic()
 {
     tar_header header;
     tar_init_header(&header);
     printf("\n+++ Fuzzing Magic +++\n");
-    int prev_success = test_status.number_of_success;
-    fuzz_field(header.magic, sizeof(header.magic));
-    test_status.magic_fuzzing_success = test_status.number_of_success - prev_success;
+
+    // Test 1: Junk magic
+    snprintf(header.magic, sizeof(header.magic), "BADMAG");
+    tar_generate_empty(&header);
+    if (run_extractor(extractor_path))
+        test_status.magic_fuzzing_success++;
+
+    // Test 2: Overflow magic
+    memset(header.magic, '\xFF', sizeof(header.magic));
+    tar_generate_empty(&header);
+    if (run_extractor(extractor_path))
+        test_status.magic_fuzzing_success++;
+
+    // Test 3: Short magic
+    snprintf(header.magic, sizeof(header.magic), "ust");
+    tar_generate_empty(&header);
+    if (run_extractor(extractor_path))
+        test_status.magic_fuzzing_success++;
+
     printf("+++ Magic Fuzzing Done +++\n");
 }
 
@@ -442,8 +356,6 @@ void fuzz_version()
     tar_header header;
     tar_init_header(&header);
     printf("\n+++ Fuzzing Version +++\n");
-    int prev_success = test_status.number_of_success;
-    fuzz_field(header.version, sizeof(header.version));
 
     char octal[3] = {'0', '0', '\0'};
     for (int i = 0; i < 8; i++)
@@ -455,10 +367,10 @@ void fuzz_version()
             tar_init_header(&header);
             strncpy(header.version, octal, sizeof(header.version));
             tar_generate_empty(&header);
-            run_extractor(extractor_path);
+            if (run_extractor(extractor_path))
+                test_status.version_fuzzing_success++;
         }
     }
-    test_status.version_fuzzing_success = test_status.number_of_success - prev_success;
     printf("+++ Version Fuzzing Done +++\n");
 }
 
@@ -501,9 +413,7 @@ void fuzz_gname()
     tar_header header;
     tar_init_header(&header);
     printf("\n+++ Fuzzing Gname +++\n");
-    int prev_success = test_status.number_of_success;
-    fuzz_field(header.gname, sizeof(header.gname));
-    test_status.gname_fuzzing_success = test_status.number_of_success - prev_success;
+
     printf("+++ Gname Fuzzing Done +++\n");
 }
 
@@ -519,17 +429,17 @@ void fuzz_huge_content()
     // Test 1: 1MB content
     char content[1024 * 1024]; // 1MB
     memset(content, 'X', sizeof(content));
-    snprintf(header.size, sizeof(header.size), "%lo", (unsigned long)sizeof(content)); // Fixed %o to %lo
+    snprintf(header.size, sizeof(header.size), "%lo", (unsigned long)sizeof(content));
     tar_generate(&header, content, sizeof(content), NULL, 0);
     if (run_extractor(extractor_path))
-        test_status.size_fuzzing_success++;
+        test_status.huge_content_fuzzing_success++; // Fixed
 
     // Test 2: Huge size with short content
     snprintf(header.size, sizeof(header.size), "77777777777");
     char short_content[] = "Short";
     tar_generate(&header, short_content, sizeof(short_content), NULL, 0);
     if (run_extractor(extractor_path))
-        test_status.size_fuzzing_success++;
+        test_status.huge_content_fuzzing_success++; // Fixed
 
     printf("+++ Huge Content Fuzzing Done +++\n");
 }
@@ -547,13 +457,13 @@ void fuzz_prefix()
     memset(header.prefix, '\xFF', sizeof(header.prefix));
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
-        test_status.name_fuzzing_success++; // Tied to name handling
+        test_status.prefix_fuzzing_success++; // Fixed
 
     // Test 2: No null terminator
     memset(header.prefix, 'P', sizeof(header.prefix));
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
-        test_status.name_fuzzing_success++;
+        test_status.prefix_fuzzing_success++; // Fixed
 
     printf("+++ Prefix Fuzzing Done +++\n");
 }
@@ -581,6 +491,38 @@ void fuzz_padding_footer()
         test_status.end_of_file_fuzzing_success++;
 
     printf("+++ Padding and Footer Fuzzing Done +++\n");
+}
+
+/**
+ * @brief Fuzz combo of fields for complex crashes.
+ */
+void fuzz_combo()
+{
+    tar_header header;
+    tar_init_header(&header);
+    printf("\n+++ Fuzzing Combo +++\n");
+
+    // Test 1: Name + size + typeflag
+    memset(header.name, '\xFF', sizeof(header.name));
+    snprintf(header.size, sizeof(header.size), "99999999999");
+    header.typeflag = '\x90';
+    tar_generate_empty(&header);
+    if (run_extractor(extractor_path))
+        test_status.name_fuzzing_success++;
+
+    // Test 2: Linkname + prefix + chksum
+    update_checksum = 0;
+    tar_init_header(&header);
+    memset(header.linkname, '\xFF', sizeof(header.linkname));
+    memset(header.prefix, '\xFF', sizeof(header.prefix));
+    snprintf(header.chksum, sizeof(header.chksum), "123456");
+    header.typeflag = SYMTYPE;
+    tar_generate_empty(&header);
+    if (run_extractor(extractor_path))
+        test_status.linkname_fuzzing_success++;
+    update_checksum = 1;
+
+    printf("+++ Combo Fuzzing Done +++\n");
 }
 
 /**
@@ -679,8 +621,9 @@ void fuzz_multi_file()
     tar_init_header(&h2);
     printf("\n+++ Fuzzing Multi-File +++\n");
 
-    // Test 1: Huge size in second header
+    // Test 1: Huge size with junk name
     snprintf(h2.size, sizeof(h2.size), "99999999999");
+    memset(h2.name, '\xFF', sizeof(h2.name));
     char content[] = "Multi-file content";
     FILE *fp = fopen("archive.tar", "wb");
     fwrite(&h1, sizeof(tar_header), 1, fp);
@@ -691,38 +634,67 @@ void fuzz_multi_file()
     fclose(fp);
     test_status.number_of_tar_created++;
     if (run_extractor(extractor_path))
-        test_status.size_fuzzing_success++;
+        test_status.multi_file_fuzzing_success++;
 
-    // Test 2: Invalid typeflag with name overflow
+    // Test 2: Invalid typeflag with huge content
     tar_init_header(&h1);
     tar_init_header(&h2);
     h2.typeflag = '\x91';
-    memset(h2.name, '\xFF', sizeof(h2.name));
+    char huge_content[1024 * 1024];
+    memset(huge_content, 'X', sizeof(huge_content));
+    snprintf(h2.size, sizeof(h2.size), "%lo", (unsigned long)sizeof(huge_content));
     fp = fopen("archive.tar", "wb");
     fwrite(&h1, sizeof(tar_header), 1, fp);
     fwrite(&h2, sizeof(tar_header), 1, fp);
+    fwrite(huge_content, sizeof(huge_content), 1, fp);
     fwrite(end, END_BYTES, 1, fp);
     fclose(fp);
     test_status.number_of_tar_created++;
     if (run_extractor(extractor_path))
-        test_status.typeflag_fuzzing_success++;
+        test_status.multi_file_fuzzing_success++;
 
-    // Test 3: Corrupt checksum in second header
+    // Test 3: Corrupt checksum with prefix
     tar_init_header(&h1);
     tar_init_header(&h2);
     update_checksum = 0;
     snprintf(h2.chksum, sizeof(h2.chksum), "99999999");
+    memset(h2.prefix, '\xFF', sizeof(h2.prefix));
     fp = fopen("archive.tar", "wb");
     fwrite(&h1, sizeof(tar_header), 1, fp);
     fwrite(&h2, sizeof(tar_header), 1, fp);
+    fwrite(content, sizeof(content), 1, fp);
     fwrite(end, END_BYTES, 1, fp);
     fclose(fp);
     test_status.number_of_tar_created++;
     if (run_extractor(extractor_path))
-        test_status.checksum_fuzzing_success++;
+        test_status.multi_file_fuzzing_success++;
     update_checksum = 1;
 
     printf("+++ Multi-File Fuzzing Done +++\n");
+}
+
+/**
+ * @brief Fuzz everything at once for maximum chaos.
+ */
+void fuzz_overflow_all()
+{
+    tar_header header;
+    memset(&header, '\xFF', sizeof(tar_header));
+    snprintf(header.magic, sizeof(header.magic), "ustar");
+    snprintf(header.version, sizeof(header.version), "00");
+    char content[1024 * 1024];
+    memset(content, '\xFF', sizeof(content));
+    snprintf(header.size, sizeof(header.size), "%lo", (unsigned long)sizeof(content));
+    FILE *fp = fopen("archive.tar", "wb");
+    fwrite(&header, sizeof(tar_header), 1, fp);
+    fwrite(content, sizeof(content), 1, fp);
+    char end[END_BYTES] = {0};
+    fwrite(end, END_BYTES, 1, fp);
+    fclose(fp);
+    test_status.number_of_tar_created++;
+    if (run_extractor(extractor_path))
+        test_status.size_fuzzing_success++;
+    printf("+++ Overflow All Fuzzing Done +++\n");
 }
 
 /**
@@ -758,6 +730,8 @@ int main(int argc, char *argv[])
     fuzz_huge_content();
     fuzz_prefix();
     fuzz_padding_footer();
+    fuzz_combo();
+    fuzz_overflow_all();
     printf("+++ Fuzzing Completed +++\n");
 
     print_test_status(&test_status);
