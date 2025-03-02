@@ -34,6 +34,11 @@ struct test_status_t
     int uname_fuzzing_success;
     int gname_fuzzing_success;
     int end_of_file_fuzzing_success;
+    int known_crash_fuzzing_success;
+    int multi_file_fuzzing_success;
+    int huge_content_fuzzing_success;
+    int prefix_fuzzing_success;
+    int padding_fuzzing_success;
 };
 
 void init_test_status(struct test_status_t *ts);

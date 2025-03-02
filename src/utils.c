@@ -19,17 +19,17 @@ void print_test_status(struct test_status_t *ts)
     printf("Total successes: %d\n", ts->number_of_success);
     printf("Tars created: %d\n\n", ts->number_of_tar_created);
     printf("Success with:\n");
-    printf("\t     Empty field:                         %d\n", ts->successful_with_empty_field);
-    printf("\t     Non-ASCII field:                     %d\n", ts->successful_with_non_ascii_field);
-    printf("\t     non numeric field:                   %d\n", ts->successful_with_non_numeric_field);
-    printf("\t     too short field:                     %d\n", ts->successful_with_too_short_field);
-    printf("\t     non octal field:                     %d\n", ts->successful_with_non_octal_field);
-    printf("\t     field cut in middle:                 %d\n", ts->successful_with_field_cut_in_middle);
-    printf("\t     field null terminated:               %d\n", ts->successful_with_field_not_terminated_null_byte);
-    printf("\t     field with null byte in the middle:  %d\n", ts->successful_with_null_byte_in_middle);
-    printf("\t     field with no null bytes:            %d\n", ts->successful_with_no_null_bytes);
-    printf("\t     field with special character:        %d\n", ts->successful_with_special_character);
-    printf("\t     field with negative value:           %d\n\n", ts->successful_with_negative_value);
+    printf("\t     Empty field                        : %d\n", ts->successful_with_empty_field);
+    printf("\t     Non-ASCII field                    : %d\n", ts->successful_with_non_ascii_field);
+    printf("\t     non numeric field                  : %d\n", ts->successful_with_non_numeric_field);
+    printf("\t     too short field                    : %d\n", ts->successful_with_too_short_field);
+    printf("\t     non octal field                    : %d\n", ts->successful_with_non_octal_field);
+    printf("\t     field cut in middle                : %d\n", ts->successful_with_field_cut_in_middle);
+    printf("\t     field null terminated              : %d\n", ts->successful_with_field_not_terminated_null_byte);
+    printf("\t     field with null byte in the middle : %d\n", ts->successful_with_null_byte_in_middle);
+    printf("\t     field with no null bytes           : %d\n", ts->successful_with_no_null_bytes);
+    printf("\t     field with special character       : %d\n", ts->successful_with_special_character);
+    printf("\t     field with negative value          : %d\n\n", ts->successful_with_negative_value);
     printf("Success on \n");
     printf("\t   name field       : %d\n", ts->name_fuzzing_success);
     printf("\t   mode field       : %d\n", ts->mode_fuzzing_success);
@@ -44,6 +44,11 @@ void print_test_status(struct test_status_t *ts)
     printf("\t   version field    : %d\n", ts->version_fuzzing_success);
     printf("\t   uname field      : %d\n", ts->uname_fuzzing_success);
     printf("\t   gname field      : %d\n", ts->gname_fuzzing_success);
+    printf("\t   known crash field: %d\n", ts->known_crash_fuzzing_success);
+    printf("\t   multi file field : %d\n", ts->multi_file_fuzzing_success);
+    printf("\t   huge content field: %d\n", ts->huge_content_fuzzing_success);
+    printf("\t   prefix field     : %d\n", ts->prefix_fuzzing_success);
+    printf("\t   padding field    : %d\n", ts->padding_fuzzing_success);
     printf("\t   end of file field: %d\n\n", ts->end_of_file_fuzzing_success);
 }
 
@@ -67,11 +72,11 @@ int run_extractor(char *path)
     test_status.number_of_tries++;
     char cmd[51];
     snprintf(cmd, sizeof(cmd), "%s archive.tar", path);
-    char buf[33];
+    char buf[128];
     FILE *fp = popen(cmd, "r");
     if (!fp)
     {
-        printf("Error opening pipe\n");
+        printf("Error opening pipe!\n");
         return -1;
     }
     if (!fgets(buf, sizeof(buf), fp))
@@ -86,6 +91,11 @@ int run_extractor(char *path)
         char success_name[32];
         snprintf(success_name, sizeof(success_name), "success_%d.tar", test_status.number_of_success);
         rename("archive.tar", success_name);
+        printf("Saved crash file: %s\n", success_name);
+    }
+    else
+    {
+        printf("Extractor output: '%s'\n", buf); // Keep for non-crash cases
     }
     pclose(fp);
     return rv;
@@ -95,14 +105,14 @@ void tar_init_header(tar_header *header)
 {
     memset(header, 0, sizeof(tar_header));
     snprintf(header->name, sizeof(header->name), "testfile");
-    snprintf(header->mode, sizeof(header->mode), "0644"); // rw-r--r--
+    snprintf(header->mode, sizeof(header->mode), "0644");
     snprintf(header->uid, sizeof(header->uid), "01000");
     snprintf(header->gid, sizeof(header->gid), "01000");
     snprintf(header->size, sizeof(header->size), "%011o", 0);
-    snprintf(header->mtime, sizeof(header->mtime), "%011lo", (long)time(NULL)); // Changed %o to %lo
+    snprintf(header->mtime, sizeof(header->mtime), "%011lo", (long)time(NULL));
     header->typeflag = REGTYPE;
     snprintf(header->magic, sizeof(header->magic), TMAGIC);
-    snprintf(header->version, sizeof(header->version), TVERSION);
+    strncpy(header->version, TVERSION, TVERSLEN); // Explicitly 2 bytes, no null
     snprintf(header->uname, sizeof(header->uname), "user");
     snprintf(header->gname, sizeof(header->gname), "group");
     if (update_checksum)
@@ -127,7 +137,7 @@ void tar_generate(tar_header *header, char *content, size_t content_size, char *
     if (end_size > 0)
         fwrite(end_data, end_size, 1, fp);
     fclose(fp);
-    test_status.number_of_tar_created++;
+    test_status.number_of_tar_created++; // Ensure this runs
 }
 
 void tar_generate_empty(tar_header *header)
