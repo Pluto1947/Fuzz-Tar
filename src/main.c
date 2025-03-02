@@ -81,7 +81,7 @@ void fuzz_uid()
 {
     tar_header header;
     tar_init_header(&header);
-    printf("\n~~~ Fuzzing UID ~~~\n");
+    printf("\n+++ Fuzzing UID +++\n");
 
     memset(header.uid, '9', sizeof(header.uid));
     tar_generate_empty(&header);
@@ -98,7 +98,7 @@ void fuzz_uid()
     if (run_extractor(extractor_path))
         test_status.uid_fuzzing_success++;
 
-    printf("~~~ UID Fuzzing Done ~~~\n");
+    printf("+++ UID Fuzzing Done +++\n");
 }
 
 /**
@@ -108,7 +108,7 @@ void fuzz_gid()
 {
     tar_header header;
     tar_init_header(&header);
-    printf("\n~~~ Fuzzing GID ~~~\n");
+    printf("\n+++ Fuzzing GID +++\n");
 
     memset(header.gid, '9', sizeof(header.gid));
     tar_generate_empty(&header);
@@ -125,7 +125,7 @@ void fuzz_gid()
     if (run_extractor(extractor_path))
         test_status.gid_fuzzing_success++;
 
-    printf("~~~ GID Fuzzing Done ~~~\n");
+    printf("+++ GID Fuzzing Done +++\n");
 }
 
 /**
@@ -212,7 +212,7 @@ void fuzz_chksum()
 {
     tar_header header;
     tar_init_header(&header);
-    printf("\n~~~ Fuzzing Checksum ~~~\n");
+    printf("\n+++ Fuzzing Checksum +++\n");
     update_checksum = 0;
 
     tar_compute_checksum(&header);
@@ -234,7 +234,7 @@ void fuzz_chksum()
         test_status.checksum_fuzzing_success++;
 
     update_checksum = 1;
-    printf("~~~ Checksum Fuzzing Done ~~~\n");
+    printf("+++ Checksum Fuzzing Done +++\n");
 }
 
 /**
@@ -309,7 +309,7 @@ void fuzz_magic()
 {
     tar_header header;
     tar_init_header(&header);
-    printf("\n~~~ Fuzzing Magic ~~~\n");
+    printf("\n+++ Fuzzing Magic +++\n");
 
     snprintf(header.magic, sizeof(header.magic), "BADMA"); // 5 bytes + null
     tar_compute_checksum(&header);
@@ -330,7 +330,7 @@ void fuzz_magic()
     if (run_extractor(extractor_path))
         test_status.magic_fuzzing_success++;
 
-    printf("~~~ Magic Fuzzing Done ~~~\n");
+    printf("+++ Magic Fuzzing Done +++\n");
 }
 
 /**
@@ -350,7 +350,7 @@ void fuzz_version()
         {
             octal[1] = j + '0';
             tar_init_header(&header);
-            strncpy(header.version, octal, sizeof(header.version));
+            memcpy(header.version, octal, sizeof(header.version)); // Fixed
             tar_generate_empty(&header);
             if (run_extractor(extractor_path))
                 test_status.version_fuzzing_success++;
@@ -547,7 +547,7 @@ void fuzz_known_crashes()
 {
     tar_header header;
     tar_init_header(&header);
-    printf("\n~~~ Fuzzing Known Crash Conditions ~~~\n");
+    printf("\n+++ Fuzzing Known Crash Conditions +++\n");
     int prev_success = test_status.number_of_success;
 
     memset(header.name, '\xFF', sizeof(header.name));
@@ -586,7 +586,7 @@ void fuzz_known_crashes()
 
     test_status.known_crash_fuzzing_success = test_status.number_of_success - prev_success;
 
-    printf("~~~ Known Crash Fuzzing Done ~~~\n");
+    printf("+++ Known Crash Fuzzing Done +++\n");
 }
 
 /**
@@ -597,7 +597,7 @@ void fuzz_multi_file()
     tar_header h1, h2;
     tar_init_header(&h1);
     tar_init_header(&h2);
-    printf("\n~~~ Fuzzing Multi-File ~~~\n");
+    printf("\n+++ Fuzzing Multi-File +++\n");
 
     snprintf(h2.size, sizeof(h2.size), "99999999999");
     memset(h2.name, '\xFF', sizeof(h2.name));
@@ -645,7 +645,7 @@ void fuzz_multi_file()
         test_status.multi_file_fuzzing_success++;
     update_checksum = 1;
 
-    printf("~~~ Multi-File Fuzzing Done ~~~\n");
+    printf("+++ Multi-File Fuzzing Done +++\n");
 }
 
 /**
@@ -656,7 +656,7 @@ void fuzz_overflow_all()
     tar_header header;
     memset(&header, '\xFF', sizeof(tar_header));
     snprintf(header.magic, sizeof(header.magic), "ustar");
-    snprintf(header.version, sizeof(header.version), "00");
+    memcpy(header.version, "00", sizeof(header.version)); // Fixed
     char content[1024 * 1024];
     memset(content, '\xFF', sizeof(content));
     snprintf(header.size, sizeof(header.size), "%lo", (unsigned long)sizeof(content));
