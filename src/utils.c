@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include <errno.h>
 #include "utils.h"
 
 int update_checksum = 1;
@@ -67,11 +68,12 @@ int run_extractor(char *path)
     FILE *fp = popen(cmd, "r");
     if (!fp)
     {
-        printf("Error opening pipe!\n");
+        printf("Error opening pipe for '%s': %s\n", path, strerror(errno)); // Debug
         return -1;
     }
     if (!fgets(buf, sizeof(buf), fp))
     {
+        printf("Error reading from pipe: %s\n", strerror(errno)); // Debug
         pclose(fp);
         return 0;
     }
@@ -88,7 +90,10 @@ int run_extractor(char *path)
     {
         printf("Extractor output: '%s'\n", buf);
     }
-    pclose(fp);
+    if (pclose(fp) == -1)
+    {
+        printf("Error closing pipe: %s\n", strerror(errno)); // Debug
+    }
     return rv;
 }
 
