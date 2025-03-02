@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 #include "utils.h"
 
 int update_checksum = 1;
@@ -102,7 +103,7 @@ void tar_init_header(tar_header *header)
     snprintf(header->mtime, sizeof(header->mtime), "%011lo", (long)time(NULL));
     header->typeflag = REGTYPE;
     snprintf(header->magic, sizeof(header->magic), TMAGIC);
-    strncpy(header->version, TVERSION, TVERSLEN); // Explicitly 2 bytes, no null
+    memcpy(header->version, TVERSION, TVERSLEN);
     snprintf(header->uname, sizeof(header->uname), "user");
     snprintf(header->gname, sizeof(header->gname), "group");
     if (update_checksum)

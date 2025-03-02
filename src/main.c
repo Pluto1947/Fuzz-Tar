@@ -81,27 +81,24 @@ void fuzz_uid()
 {
     tar_header header;
     tar_init_header(&header);
-    printf("\n+++ Fuzzing UID +++\n");
+    printf("\n~~~ Fuzzing UID ~~~\n");
 
-    // Test 1: Oversized uid
     memset(header.uid, '9', sizeof(header.uid));
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.uid_fuzzing_success++;
 
-    // Test 2: Negative uid
-    snprintf(header.uid, sizeof(header.uid), "-0000001");
+    snprintf(header.uid, sizeof(header.uid), "-000001"); // 7 bytes + null
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.uid_fuzzing_success++;
 
-    // Test 3: Non-octal uid
-    snprintf(header.uid, sizeof(header.uid), "ABCDEF");
+    snprintf(header.uid, sizeof(header.uid), "ABCDEF"); // 6 bytes + null
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.uid_fuzzing_success++;
 
-    printf("+++ UID Fuzzing Done +++\n");
+    printf("~~~ UID Fuzzing Done ~~~\n");
 }
 
 /**
@@ -111,27 +108,24 @@ void fuzz_gid()
 {
     tar_header header;
     tar_init_header(&header);
-    printf("\n+++ Fuzzing GID +++\n");
+    printf("\n~~~ Fuzzing GID ~~~\n");
 
-    // Test 1: Oversized gid
     memset(header.gid, '9', sizeof(header.gid));
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.gid_fuzzing_success++;
 
-    // Test 2: Negative gid
-    snprintf(header.gid, sizeof(header.gid), "-0000001");
+    snprintf(header.gid, sizeof(header.gid), "-000001"); // 7 bytes + null
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.gid_fuzzing_success++;
 
-    // Test 3: Non-octal gid
-    snprintf(header.gid, sizeof(header.gid), "GIDJUNK");
+    snprintf(header.gid, sizeof(header.gid), "GIDJUN"); // 6 bytes + null
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.gid_fuzzing_success++;
 
-    printf("+++ GID Fuzzing Done +++\n");
+    printf("~~~ GID Fuzzing Done ~~~\n");
 }
 
 /**
@@ -218,39 +212,29 @@ void fuzz_chksum()
 {
     tar_header header;
     tar_init_header(&header);
-    printf("\n+++ Fuzzing Checksum +++\n");
+    printf("\n~~~ Fuzzing Checksum ~~~\n");
     update_checksum = 0;
 
-    // Test 1: Slightly off checksum
     tar_compute_checksum(&header);
     header.chksum[0] = '1';
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.checksum_fuzzing_success++;
 
-    // Test 2: Overflow with content
-    snprintf(header.chksum, sizeof(header.chksum), "77777777");
+    snprintf(header.chksum, sizeof(header.chksum), "7777777"); // 7 bytes + null
     snprintf(header.size, sizeof(header.size), "00000000001");
     char content[] = "Z";
     tar_generate(&header, content, sizeof(content), NULL, 0);
     if (run_extractor(extractor_path))
         test_status.checksum_fuzzing_success++;
 
-    // Test 3: Junk with multi-file
-    snprintf(header.chksum, sizeof(header.chksum), "XYZ123");
-    FILE *fp = fopen("archive.tar", "wb");
-    fwrite(&header, sizeof(tar_header), 1, fp);
-    tar_init_header(&header);
-    fwrite(&header, sizeof(tar_header), 1, fp);
-    char end[END_BYTES] = {0};
-    fwrite(end, END_BYTES, 1, fp);
-    fclose(fp);
-    test_status.number_of_tar_created++;
+    snprintf(header.chksum, sizeof(header.chksum), "XYZ123"); // 6 bytes + null
+    tar_generate(&header, content, sizeof(content), NULL, 0);
     if (run_extractor(extractor_path))
         test_status.checksum_fuzzing_success++;
 
     update_checksum = 1;
-    printf("+++ Checksum Fuzzing Done +++\n");
+    printf("~~~ Checksum Fuzzing Done ~~~\n");
 }
 
 /**
@@ -325,27 +309,28 @@ void fuzz_magic()
 {
     tar_header header;
     tar_init_header(&header);
-    printf("\n+++ Fuzzing Magic +++\n");
+    printf("\n~~~ Fuzzing Magic ~~~\n");
 
-    // Test 1: Junk magic
-    snprintf(header.magic, sizeof(header.magic), "BADMAG");
+    snprintf(header.magic, sizeof(header.magic), "BADMA"); // 5 bytes + null
+    tar_compute_checksum(&header);
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.magic_fuzzing_success++;
 
-    // Test 2: Overflow magic
     memset(header.magic, '\xFF', sizeof(header.magic));
-    tar_generate_empty(&header);
+    snprintf(header.size, sizeof(header.size), "00000000001");
+    char content[] = "M";
+    tar_generate(&header, content, sizeof(content), NULL, 0);
     if (run_extractor(extractor_path))
         test_status.magic_fuzzing_success++;
 
-    // Test 3: Short magic
-    snprintf(header.magic, sizeof(header.magic), "ust");
-    tar_generate_empty(&header);
+    snprintf(header.magic, sizeof(header.magic), "ust"); // 3 bytes + null
+    snprintf(header.size, sizeof(header.size), "77777777777");
+    tar_generate(&header, content, sizeof(content), NULL, 0);
     if (run_extractor(extractor_path))
         test_status.magic_fuzzing_success++;
 
-    printf("+++ Magic Fuzzing Done +++\n");
+    printf("~~~ Magic Fuzzing Done ~~~\n");
 }
 
 /**
@@ -562,53 +547,46 @@ void fuzz_known_crashes()
 {
     tar_header header;
     tar_init_header(&header);
-    printf("\n+++ Fuzzing Known Crash Conditions +++\n");
+    printf("\n~~~ Fuzzing Known Crash Conditions ~~~\n");
     int prev_success = test_status.number_of_success;
 
-    // Test 1: Name overflow
     memset(header.name, '\xFF', sizeof(header.name));
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.name_fuzzing_success++;
 
-    // Test 2: Invalid typeflag
     header.typeflag = '\x90';
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.typeflag_fuzzing_success++;
 
-    // Test 3: Negative size
     char content[] = "Negative size test.";
-    snprintf(header.size, sizeof(header.size), "-00000000001");
+    snprintf(header.size, sizeof(header.size), "-000000001"); // 10 bytes + null
     tar_generate(&header, content, sizeof(content), NULL, 0);
     if (run_extractor(extractor_path))
         test_status.size_fuzzing_success++;
 
-    // Test 4: Huge mtime
     snprintf(header.mtime, sizeof(header.mtime), "77777777777");
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.mtime_fuzzing_success++;
 
-    // Test 5: Invalid checksum
     update_checksum = 0;
     tar_init_header(&header);
-    snprintf(header.chksum, sizeof(header.chksum), "99999999");
+    snprintf(header.chksum, sizeof(header.chksum), "9999999"); // 7 bytes + null
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.checksum_fuzzing_success++;
     update_checksum = 1;
 
-    // Test 6: Oversized uid
     memset(header.uid, '9', sizeof(header.uid));
     tar_generate_empty(&header);
     if (run_extractor(extractor_path))
         test_status.uid_fuzzing_success++;
 
-    // Track additional crashes as known_crash_fuzzing_success
     test_status.known_crash_fuzzing_success = test_status.number_of_success - prev_success;
 
-    printf("+++ Known Crash Fuzzing Done +++\n");
+    printf("~~~ Known Crash Fuzzing Done ~~~\n");
 }
 
 /**
@@ -619,9 +597,8 @@ void fuzz_multi_file()
     tar_header h1, h2;
     tar_init_header(&h1);
     tar_init_header(&h2);
-    printf("\n+++ Fuzzing Multi-File +++\n");
+    printf("\n~~~ Fuzzing Multi-File ~~~\n");
 
-    // Test 1: Huge size with junk name
     snprintf(h2.size, sizeof(h2.size), "99999999999");
     memset(h2.name, '\xFF', sizeof(h2.name));
     char content[] = "Multi-file content";
@@ -636,7 +613,6 @@ void fuzz_multi_file()
     if (run_extractor(extractor_path))
         test_status.multi_file_fuzzing_success++;
 
-    // Test 2: Invalid typeflag with huge content
     tar_init_header(&h1);
     tar_init_header(&h2);
     h2.typeflag = '\x91';
@@ -653,11 +629,10 @@ void fuzz_multi_file()
     if (run_extractor(extractor_path))
         test_status.multi_file_fuzzing_success++;
 
-    // Test 3: Corrupt checksum with prefix
     tar_init_header(&h1);
     tar_init_header(&h2);
     update_checksum = 0;
-    snprintf(h2.chksum, sizeof(h2.chksum), "99999999");
+    snprintf(h2.chksum, sizeof(h2.chksum), "9999999"); // 7 bytes + null
     memset(h2.prefix, '\xFF', sizeof(h2.prefix));
     fp = fopen("archive.tar", "wb");
     fwrite(&h1, sizeof(tar_header), 1, fp);
@@ -670,7 +645,7 @@ void fuzz_multi_file()
         test_status.multi_file_fuzzing_success++;
     update_checksum = 1;
 
-    printf("+++ Multi-File Fuzzing Done +++\n");
+    printf("~~~ Multi-File Fuzzing Done ~~~\n");
 }
 
 /**
