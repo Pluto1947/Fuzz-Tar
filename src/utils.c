@@ -68,12 +68,12 @@ int run_extractor(char *path)
     FILE *fp = popen(cmd, "r");
     if (!fp)
     {
-        printf("Error opening pipe for '%s': %s\n", path, strerror(errno)); // Debug
+        // printf("Error opening pipe for '%s': %s\n", path, strerror(errno)); // Debug
         return -1;
     }
     if (!fgets(buf, sizeof(buf), fp))
     {
-        printf("Error reading from pipe: %s\n", strerror(errno)); // Debug
+        // printf("Error reading from pipe: %s\n", strerror(errno)); // Debug
         pclose(fp);
         return 0;
     }
@@ -92,7 +92,7 @@ int run_extractor(char *path)
     }
     if (pclose(fp) == -1)
     {
-        printf("Error closing pipe: %s\n", strerror(errno)); // Debug
+        // printf("Error closing pipe: %s\n", strerror(errno)); // Debug
     }
     return rv;
 }
